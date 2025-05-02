@@ -56,7 +56,7 @@ pipeline {
         //     }
         // }
 
-        // Deploy to Splunk
+       /// // Deploy to Splunk
         stage('Deploy') {
             steps {
                 script {
