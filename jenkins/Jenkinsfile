@@ -64,7 +64,7 @@ pipeline {
                     bat """
                         curl -k -X POST "%SPLUNK_HEC_URL%" ^
                             -H "Authorization: Splunk %SPLUNK_HEC_TOKEN%" ^
-                            -d "{\\"event\\": \\"Deployment Started\\", \\"sourcetype\\": \\"login_logs\\", \\"index\\": \\"%SPLUNK_INDEX%\\"}"
+                            -d "{\\"event\\": \\"Deployment Started\\", \\"sourcetype\\": \\"frontend_files\\", \\"index\\": \\"%SPLUNK_INDEX%\\"}"
                     """
                 }
             }
