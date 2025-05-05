@@ -5,15 +5,20 @@ pipeline {
         SPLUNK_HEC_URL = 'https://127.0.0.1:8088/services/collector/event'
         SPLUNK_HEC_TOKEN = credentials('3366c860-b822-4ee9-8cfe-398871d88cc5')
         SPLUNK_INDEX = 'vite_logs'
-
-        /////////
     }
 
     stages {
-
         stage('Install Dependencies') {
             steps {
-                bat "npm install"
+                script {
+                    bat "npm install"
+                    bat """
+                        curl -k -X POST "${env.SPLUNK_HEC_URL}" ^
+                        -H "Authorization: Splunk ${env.SPLUNK_HEC_TOKEN}" ^
+                        -H "Content-Type: application/json" ^
+                        -d "{\\"event\\": \\"Dependencies installed\\", \\"sourcetype\\": \\"pipeline_stage\\", \\"index\\": \\"${env.SPLUNK_INDEX}\\"}"
+                    """
+                }
             }
         }
 
@@ -23,9 +28,41 @@ pipeline {
                     def packageJson = readJSON file: 'package.json'
                     if (packageJson.scripts?.test) {
                         bat "npm test"
+                        bat """
+                            curl -k -X POST "${env.SPLUNK_HEC_URL}" ^
+                            -H "Authorization: Splunk ${env.SPLUNK_HEC_TOKEN}" ^
+                            -H "Content-Type: application/json" ^
+                            -d "{\\"event\\": \\"Tests executed successfully\\", \\"sourcetype\\": \\"pipeline_stage\\", \\"index\\": \\"${env.SPLUNK_INDEX}\\"}"
+                        """
                     } else {
                         echo 'No test script defined in package.json'
                     }
+                }
+            }
+        }
+
+        stage('Approval') {
+            steps {
+                script {
+                    bat """
+                        curl -k -X POST "${env.SPLUNK_HEC_URL}" ^
+                        -H "Authorization: Splunk ${env.SPLUNK_HEC_TOKEN}" ^
+                        -H "Content-Type: application/json" ^
+                        -d "{\\"event\\": \\"Waiting for manual approval\\", \\"sourcetype\\": \\"approval\\", \\"index\\": \\"${env.SPLUNK_INDEX}\\"}"
+                    """
+
+                    def approval = input(
+                        id: 'Approval',
+                        message: 'Approve deployment?',
+                        parameters: [string(defaultValue: 'yes', name: 'Confirm')]
+                    )
+
+                    bat """
+                        curl -k -X POST "${env.SPLUNK_HEC_URL}" ^
+                        -H "Authorization: Splunk ${env.SPLUNK_HEC_TOKEN}" ^
+                        -H "Content-Type: application/json" ^
+                        -d "{\\"event\\": \\"Approval received: ${approval}\\", \\"sourcetype\\": \\"approval\\", \\"index\\": \\"${env.SPLUNK_INDEX}\\"}"
+                    """
                 }
             }
         }
@@ -46,6 +83,38 @@ pipeline {
     }
 
     post {
+        success {
+            script {
+                bat """
+                    curl -k -X POST "${env.SPLUNK_HEC_URL}" ^
+                    -H "Authorization: Splunk ${env.SPLUNK_HEC_TOKEN}" ^
+                    -H "Content-Type: application/json" ^
+                    -d "{\\"event\\": \\"Build succeeded\\", \\"sourcetype\\": \\"pipeline_status\\", \\"index\\": \\"${env.SPLUNK_INDEX}\\"}"
+                """
+            }
+            emailext(
+                subject: "✅ Jenkins Build Successful - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: "The build for job '${env.JOB_NAME}' completed successfully.\n\nCheck details: ${env.BUILD_URL}",
+                to: 'veda@middlewaretalents.com'
+            )
+        }
+
+        failure {
+            script {
+                bat """
+                    curl -k -X POST "${env.SPLUNK_HEC_URL}" ^
+                    -H "Authorization: Splunk ${env.SPLUNK_HEC_TOKEN}" ^
+                    -H "Content-Type: application/json" ^
+                    -d "{\\"event\\": \\"Build failed\\", \\"sourcetype\\": \\"pipeline_status\\", \\"index\\": \\"${env.SPLUNK_INDEX}\\"}"
+                """
+            }
+            emailext(
+                subject: "❌ Jenkins Build FAILED - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: "The build for job '${env.JOB_NAME}' failed.\n\nCheck logs: ${env.BUILD_URL}",
+                to: 'veda@middlewaretalents.com'
+            )
+        }
+
         always {
             cleanWs()
         }
