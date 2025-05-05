@@ -2,40 +2,33 @@ pipeline {
     agent any
 
     environment {
-        // Splunk HEC URL and token for logging
         SPLUNK_HEC_URL = 'https://127.0.0.1:8088/services/collector/event'
         SPLUNK_HEC_TOKEN = credentials('3366c860-b822-4ee9-8cfe-398871d88cc5')
         SPLUNK_INDEX = 'vite_logs'
         GIT_REPO_URL = 'https://github.com/Samhitha1705/splunkvite.git'
+        //REPO_DIR = 'splunkvite' // folder name after cloning
     }
 
     stages {
-        // Checkout the latest code from GitHub
         stage('Checkout') {
             steps {
-                script {
-                    bat "git clone %GIT_REPO_URL%"
-                    dir('logs') {
-                        bat "git pull"
-                    }
-                }
+                // Uses Jenkins built-in Git support
+                git url: "${env.GIT_REPO_URL}"
             }
         }
 
-        // Install dependencies (e.g., Node.js packages)
         stage('Install Dependencies') {
             steps {
-                dir('logs') {
+                dir("${env.REPO_DIR}") {
                     bat "npm install"
                 }
             }
         }
 
-        // Run any tests if defined in package.json
         stage('Run Tests') {
             steps {
                 script {
-                    dir('logs') {
+                    dir("${env.REPO_DIR}") {
                         def packageJson = readJSON file: 'package.json'
                         if (packageJson.scripts?.test) {
                             bat "npm test"
@@ -47,34 +40,24 @@ pipeline {
             }
         }
 
-        // Run the server
-        // stage('Run Server') {
-        //     steps {
-        //         dir('logs') {
-        //             bat "node server.js"
-        //         }
-        //     }
-        // }
-
-       /// // Deploy to Splunk
         stage('Deploy') {
             steps {
                 script {
                     echo "Deploying to production..."
                     bat """
-                        curl -k -X POST "%SPLUNK_HEC_URL%" ^
-                            -H "Authorization: Splunk %SPLUNK_HEC_TOKEN%" ^
-                            -d "{\\"event\\": \\"Deployment Started\\", \\"sourcetype\\": \\"frontend_files\\", \\"index\\": \\"%SPLUNK_INDEX%\\"}"
+                        curl -k -X POST "${env.SPLUNK_HEC_URL}" ^
+                        -H "Authorization: Splunk ${env.SPLUNK_HEC_TOKEN}" ^
+                        -H "Content-Type: application/json" ^
+                        -d "{\\"event\\": \\"Deployment Started\\", \\"sourcetype\\": \\"frontend_files\\", \\"index\\": \\"${env.SPLUNK_INDEX}\\"}"
                     """
                 }
             }
         }
-    } // 🔧 this closing brace was missing for the stages block
+    }
 
     post {
         always {
-            cleanWs()  // Clean up workspace after the build is complete
+            cleanWs()
         }
     }
 }
-
