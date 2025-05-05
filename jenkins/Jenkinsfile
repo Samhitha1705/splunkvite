@@ -5,36 +5,24 @@ pipeline {
         SPLUNK_HEC_URL = 'https://127.0.0.1:8088/services/collector/event'
         SPLUNK_HEC_TOKEN = credentials('3366c860-b822-4ee9-8cfe-398871d88cc5')
         SPLUNK_INDEX = 'vite_logs'
-        GIT_REPO_URL = 'https://github.com/Samhitha1705/splunkvite.git'
-        //REPO_DIR = 'splunkvite' // folder name after cloning
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                // Uses Jenkins built-in Git support
-                git url: "${env.GIT_REPO_URL}"
-            }
-        }
 
         stage('Install Dependencies') {
             steps {
-                dir("${env.REPO_DIR}") {
-                    bat "npm install"
-                }
+                bat "npm install"
             }
         }
 
         stage('Run Tests') {
             steps {
                 script {
-                    dir("${env.REPO_DIR}") {
-                        def packageJson = readJSON file: 'package.json'
-                        if (packageJson.scripts?.test) {
-                            bat "npm test"
-                        } else {
-                            echo 'No test script defined in package.json'
-                        }
+                    def packageJson = readJSON file: 'package.json'
+                    if (packageJson.scripts?.test) {
+                        bat "npm test"
+                    } else {
+                        echo 'No test script defined in package.json'
                     }
                 }
             }
