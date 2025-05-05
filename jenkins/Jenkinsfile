@@ -6,7 +6,7 @@ pipeline {
         SPLUNK_HEC_TOKEN = credentials('3366c860-b822-4ee9-8cfe-398871d88cc5')
         SPLUNK_INDEX = 'vite_logs'
 
-        
+        /////////
     }
 
     stages {
