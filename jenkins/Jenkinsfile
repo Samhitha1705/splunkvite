@@ -1,6 +1,6 @@
 pipeline {
     agent any
-////
+////////////
     environment {
         SPLUNK_HEC_URL = 'https://127.0.0.1:8088/services/collector/event'
         SPLUNK_HEC_TOKEN = credentials('3366c860-b822-4ee9-8cfe-398871d88cc5')
