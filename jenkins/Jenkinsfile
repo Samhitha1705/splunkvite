@@ -2,161 +2,81 @@ pipeline {
     agent any
 
     environment {
-        SPLUNK_HEC_URL = 'https://127.0.0.1:8088/services/collector/event'
         SPLUNK_HEC_TOKEN = credentials('3366c860-b822-4ee9-8cfe-398871d88cc5')
-        SPLUNK_INDEX = 'vite_logs'
     }
 
     stages {
         stage('Install Dependencies') {
             steps {
-                script {
-                    bat "npm install"
-                    bat """
-                        curl -k -X POST "${env.SPLUNK_HEC_URL}" ^
-                        -H "Authorization: Splunk ${env.SPLUNK_HEC_TOKEN}" ^
-                        -H "Content-Type: application/json" ^
-                        -d "{\\"event\\": \\"Dependencies installed\\", \\"sourcetype\\": \\"pipeline_stage\\", \\"index\\": \\"${env.SPLUNK_INDEX}\\"}"
-                    """
-                }
+                bat 'npm install'
+                bat """curl -k -X POST "https://127.0.0.1:8088/services/collector/event" \
+                    -H "Authorization: Splunk ${SPLUNK_HEC_TOKEN}" \
+                    -H "Content-Type: application/json" \
+                    -d "{\\"event\\": \\"Dependencies installed\\", \\"sourcetype\\": \\"pipeline_stage\\", \\"index\\": \\"vite_logs\\"}" """
             }
         }
 
         stage('Run Tests') {
             steps {
-                script {
-                    def packageJson = readJSON file: 'package.json'
-                    if (packageJson.scripts?.test) {
-                        bat "npm test"
-                        bat """
-                            curl -k -X POST "${env.SPLUNK_HEC_URL}" ^
-                            -H "Authorization: Splunk ${env.SPLUNK_HEC_TOKEN}" ^
-                            -H "Content-Type: application/json" ^
-                            -d "{\\"event\\": \\"Tests executed successfully\\", \\"sourcetype\\": \\"pipeline_stage\\", \\"index\\": \\"${env.SPLUNK_INDEX}\\"}"
-                        """
-                    } else {
-                        echo 'No test script defined in package.json'
-                    }
-                }
+                bat 'npm test'
+                bat """curl -k -X POST "https://127.0.0.1:8088/services/collector/event" \
+                    -H "Authorization: Splunk ${SPLUNK_HEC_TOKEN}" \
+                    -H "Content-Type: application/json" \
+                    -d "{\\"event\\": \\"Tests executed successfully\\", \\"sourcetype\\": \\"pipeline_stage\\", \\"index\\": \\"vite_logs\\"}" """
             }
         }
 
         stage('Approval') {
             steps {
-                script {
-                    bat """
-                        curl -k -X POST "${env.SPLUNK_HEC_URL}" ^
-                        -H "Authorization: Splunk ${env.SPLUNK_HEC_TOKEN}" ^
-                        -H "Content-Type: application/json" ^
-                        -d "{\\"event\\": \\"Waiting for manual approval\\", \\"sourcetype\\": \\"approval\\", \\"index\\": \\"${env.SPLUNK_INDEX}\\"}"
-                    """
-
-                    def approval = input(
-                        id: 'Approval',
-                        message: 'Approve deployment?',
-                        parameters: [string(defaultValue: 'yes', name: 'Confirm')]
-                    )
-
-                    bat """
-                        curl -k -X POST "${env.SPLUNK_HEC_URL}" ^
-                        -H "Authorization: Splunk ${env.SPLUNK_HEC_TOKEN}" ^
-                        -H "Content-Type: application/json" ^
-                        -d "{\\"event\\": \\"Approval received: ${approval}\\", \\"sourcetype\\": \\"approval\\", \\"index\\": \\"${env.SPLUNK_INDEX}\\"}"
-                    """
-                }
+                bat """curl -k -X POST "https://127.0.0.1:8088/services/collector/event" \
+                    -H "Authorization: Splunk ${SPLUNK_HEC_TOKEN}" \
+                    -H "Content-Type: application/json" \
+                    -d "{\\"event\\": \\"Waiting for manual approval\\", \\"sourcetype\\": \\"approval\\", \\"index\\": \\"vite_logs\\"}" """
+                input message: 'Approve deployment?', ok: 'Yes'
+                bat """curl -k -X POST "https://127.0.0.1:8088/services/collector/event" \
+                    -H "Authorization: Splunk ${SPLUNK_HEC_TOKEN}" \
+                    -H "Content-Type: application/json" \
+                    -d "{\\"event\\": \\"Approval received: yes\\", \\"sourcetype\\": \\"approval\\", \\"index\\": \\"vite_logs\\"}" """
             }
         }
 
         stage('Create ServiceNow Ticket') {
             steps {
                 script {
-                    def ticketData = """
-                    {
-                        "short_description": "Deployment approval granted for ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                        "description": "Manual approval was received. Proceeding to deployment.\\nBuild URL: ${env.BUILD_URL}",
-                        "category": "Software",
-                        "subcategory": "Deployment",
-                        "contact_type": "jenkins",
-                        "urgency": "2",
-                        "impact": "2"
+                    try {
+                        def response = httpRequest(
+                            url: 'https://example.servicenow.com/api/now/table/incident',
+                            httpMode: 'POST',
+                            contentType: 'APPLICATION_JSON',
+                            requestBody: '{"short_description": "Deployment Approval Received", "urgency": "2"}',
+                            authentication: 'servicenow-cred-id'
+                        )
+                        echo "ServiceNow ticket created. Response: ${response.status}"
+                    } catch (err) {
+                        echo "Failed to create ServiceNow ticket: ${err}"
                     }
-                    """
-
-                    def response = httpRequest(
-                        acceptType: 'APPLICATION_JSON',
-                        contentType: 'APPLICATION_JSON',
-                        httpMode: 'POST',
-                        requestBody: ticketData,
-                        url: 'https://dev138942.service-now.com/api/now/table/incident',
-                        authentication: 'snow'
-                    )
-
-                    echo "ServiceNow Ticket Created. Response: ${response.content}"
-
-                    bat """
-                        curl -k -X POST "${env.SPLUNK_HEC_URL}" ^
-                        -H "Authorization: Splunk ${env.SPLUNK_HEC_TOKEN}" ^
-                        -H "Content-Type: application/json" ^
-                        -d "{\\"event\\": \\"ServiceNow ticket created\\", \\"sourcetype\\": \\"servicenow_ticket\\", \\"index\\": \\"${env.SPLUNK_INDEX}\\"}"
-                    """
                 }
             }
         }
 
         stage('Deploy') {
             steps {
-                script {
-                    echo "Deploying to production..."
-                    bat """
-                        curl -k -X POST "${env.SPLUNK_HEC_URL}" ^
-                        -H "Authorization: Splunk ${env.SPLUNK_HEC_TOKEN}" ^
-                        -H "Content-Type: application/json" ^
-                        -d "{\\"event\\": \\"Deployment Started\\", \\"sourcetype\\": \\"frontend_files\\", \\"index\\": \\"${env.SPLUNK_INDEX}\\"}"
-                    """
-                }
+                echo 'Deploying application...'
             }
         }
     }
 
     post {
-        success {
-            script {
-                emailext(
-                    subject: "✅ Jenkins Build Successful - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                    body: "The build for job '${env.JOB_NAME}' completed successfully.\n\nCheck details: ${env.BUILD_URL}",
-                    to: 'veda@middlewaretalents.com, dhanasekhar@middlewaretalents.com,Manikanta@middlewaretalents.com',
-                    from: 'vedasamhitha1978@gmail.com'
-                )
-
-                bat """
-                    curl -k -X POST "${env.SPLUNK_HEC_URL}" ^
-                    -H "Authorization: Splunk ${env.SPLUNK_HEC_TOKEN}" ^
-                    -H "Content-Type: application/json" ^
-                    -d "{\\"event\\": \\"Build succeeded\\", \\"sourcetype\\": \\"pipeline_status\\", \\"index\\": \\"${env.SPLUNK_INDEX}\\"}"
-                """
-            }
-        }
-
         failure {
-            script {
-                emailext(
-                    subject: "❌ Jenkins Build FAILED - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                    body: "The build for job '${env.JOB_NAME}' failed.\n\nCheck logs: ${env.BUILD_URL}",
-                    to: 'veda@middlewaretalents.com, dhanasekhar@middlewaretalents.com','Manikanta@middlewaretalents.com',
-                    from: 'vedasamhitha1978@gmail.com'
-                )
+            emailext (
+                to: 'veda@middlewaretalents.com',
+                from: 'vedasamhitha1978@gmail.com',
+                subject: "❌ Jenkins Build FAILED - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """The build for job '${env.JOB_NAME}' failed.
 
-                bat """
-                    curl -k -X POST "${env.SPLUNK_HEC_URL}" ^
-                    -H "Authorization: Splunk ${env.SPLUNK_HEC_TOKEN}" ^
-                    -H "Content-Type: application/json" ^
-                    -d "{\\"event\\": \\"Build failed\\", \\"sourcetype\\": \\"pipeline_status\\", \\"index\\": \\"${env.SPLUNK_INDEX}\\"}"
-                """
-            }
-        }
-
-        always {
-            cleanWs()
+Check logs: ${env.BUILD_URL}
+"""
+            )
         }
     }
 }
