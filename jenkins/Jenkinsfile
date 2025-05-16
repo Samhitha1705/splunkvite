@@ -57,7 +57,7 @@ pipeline {
                             httpMode: 'POST',
                             contentType: 'APPLICATION_JSON',
                             requestBody: '{"short_description": "Deployment Approval Received", "urgency": "2"}',
-                            authentication: 'your-correct-servicenow-cred-id' // Replace this
+                            authentication: 'your-correct-servicenow-cred-id' // Replace this with actual ID
                         )
                         echo "ServiceNow ticket created. Response: ${response.status}"
                     } catch (err) {
@@ -81,14 +81,19 @@ pipeline {
     }
 
     post {
-        failure {
-            emailext (
+        always {
+            emailext(
                 to: 'veda@middlewaretalents.com',
                 from: 'vedasamhitha1978@gmail.com',
-                subject: "❌ Jenkins Build FAILED - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: """The build for job '${env.JOB_NAME}' failed.
+                subject: "🔔 Jenkins Build - ${env.JOB_NAME} #${env.BUILD_NUMBER} - ${currentBuild.currentResult}",
+                body: """Hello,
 
-Check logs: ${env.BUILD_URL}
+The Jenkins build for job '${env.JOB_NAME}' has completed with status: ${currentBuild.currentResult}.
+
+👉 Console Output: ${env.BUILD_URL}
+
+Regards,
+Jenkins Pipeline
 """
             )
         }
