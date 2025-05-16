@@ -9,34 +9,42 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 bat 'npm install'
-                bat """curl -k -X POST "https://127.0.0.1:8088/services/collector/event" \
-                    -H "Authorization: Splunk ${SPLUNK_HEC_TOKEN}" \
-                    -H "Content-Type: application/json" \
-                    -d "{\\"event\\": \\"Dependencies installed\\", \\"sourcetype\\": \\"pipeline_stage\\", \\"index\\": \\"vite_logs\\"}" """
+                bat '''
+                    curl -k -X POST "https://127.0.0.1:8088/services/collector/event" ^
+                    -H "Authorization: Splunk %SPLUNK_HEC_TOKEN%" ^
+                    -H "Content-Type: application/json" ^
+                    -d "{\\"event\\": \\"Dependencies installed\\", \\"sourcetype\\": \\"pipeline_stage\\", \\"index\\": \\"vite_logs\\"}"
+                '''
             }
         }
 
         stage('Run Tests') {
             steps {
                 bat 'npm test'
-                bat """curl -k -X POST "https://127.0.0.1:8088/services/collector/event" \
-                    -H "Authorization: Splunk ${SPLUNK_HEC_TOKEN}" \
-                    -H "Content-Type: application/json" \
-                    -d "{\\"event\\": \\"Tests executed successfully\\", \\"sourcetype\\": \\"pipeline_stage\\", \\"index\\": \\"vite_logs\\"}" """
+                bat '''
+                    curl -k -X POST "https://127.0.0.1:8088/services/collector/event" ^
+                    -H "Authorization: Splunk %SPLUNK_HEC_TOKEN%" ^
+                    -H "Content-Type: application/json" ^
+                    -d "{\\"event\\": \\"Tests executed successfully\\", \\"sourcetype\\": \\"pipeline_stage\\", \\"index\\": \\"vite_logs\\"}"
+                '''
             }
         }
 
         stage('Approval') {
             steps {
-                bat """curl -k -X POST "https://127.0.0.1:8088/services/collector/event" \
-                    -H "Authorization: Splunk ${SPLUNK_HEC_TOKEN}" \
-                    -H "Content-Type: application/json" \
-                    -d "{\\"event\\": \\"Waiting for manual approval\\", \\"sourcetype\\": \\"approval\\", \\"index\\": \\"vite_logs\\"}" """
+                bat '''
+                    curl -k -X POST "https://127.0.0.1:8088/services/collector/event" ^
+                    -H "Authorization: Splunk %SPLUNK_HEC_TOKEN%" ^
+                    -H "Content-Type: application/json" ^
+                    -d "{\\"event\\": \\"Waiting for manual approval\\", \\"sourcetype\\": \\"approval\\", \\"index\\": \\"vite_logs\\"}"
+                '''
                 input message: 'Approve deployment?', ok: 'Yes'
-                bat """curl -k -X POST "https://127.0.0.1:8088/services/collector/event" \
-                    -H "Authorization: Splunk ${SPLUNK_HEC_TOKEN}" \
-                    -H "Content-Type: application/json" \
-                    -d "{\\"event\\": \\"Approval received: yes\\", \\"sourcetype\\": \\"approval\\", \\"index\\": \\"vite_logs\\"}" """
+                bat '''
+                    curl -k -X POST "https://127.0.0.1:8088/services/collector/event" ^
+                    -H "Authorization: Splunk %SPLUNK_HEC_TOKEN%" ^
+                    -H "Content-Type: application/json" ^
+                    -d "{\\"event\\": \\"Approval received: yes\\", \\"sourcetype\\": \\"approval\\", \\"index\\": \\"vite_logs\\"}"
+                '''
             }
         }
 
@@ -49,7 +57,7 @@ pipeline {
                             httpMode: 'POST',
                             contentType: 'APPLICATION_JSON',
                             requestBody: '{"short_description": "Deployment Approval Received", "urgency": "2"}',
-                            authentication: 'servicenow-cred-id'
+                            authentication: 'your-correct-servicenow-cred-id' // Replace this
                         )
                         echo "ServiceNow ticket created. Response: ${response.status}"
                     } catch (err) {
@@ -62,6 +70,12 @@ pipeline {
         stage('Deploy') {
             steps {
                 echo 'Deploying application...'
+                bat '''
+                    curl -k -X POST "https://127.0.0.1:8088/services/collector/event" ^
+                    -H "Authorization: Splunk %SPLUNK_HEC_TOKEN%" ^
+                    -H "Content-Type: application/json" ^
+                    -d "{\\"event\\": \\"Deployment stage completed\\", \\"sourcetype\\": \\"deployment\\", \\"index\\": \\"vite_logs\\"}"
+                '''
             }
         }
     }
