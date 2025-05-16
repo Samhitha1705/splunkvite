@@ -1,6 +1,6 @@
 pipeline {
     agent any
-//////////////////////////
+
     environment {
         SPLUNK_HEC_URL = 'https://127.0.0.1:8088/services/collector/event'
         SPLUNK_HEC_TOKEN = credentials('3366c860-b822-4ee9-8cfe-398871d88cc5')
@@ -67,6 +67,42 @@ pipeline {
             }
         }
 
+        stage('Create ServiceNow Ticket') {
+            steps {
+                script {
+                    def ticketData = """
+                    {
+                        "short_description": "Deployment approval granted for ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                        "description": "Manual approval was received. Proceeding to deployment.\\nBuild URL: ${env.BUILD_URL}",
+                        "category": "Software",
+                        "subcategory": "Deployment",
+                        "contact_type": "jenkins",
+                        "urgency": "2",
+                        "impact": "2"
+                    }
+                    """
+
+                    def response = httpRequest(
+                        acceptType: 'APPLICATION_JSON',
+                        contentType: 'APPLICATION_JSON',
+                        httpMode: 'POST',
+                        requestBody: ticketData,
+                        url: 'https://dev138942.service-now.com/api/now/table/incident',
+                        authentication: 'snow'
+                    )
+
+                    echo "ServiceNow Ticket Created. Response: ${response.content}"
+
+                    bat """
+                        curl -k -X POST "${env.SPLUNK_HEC_URL}" ^
+                        -H "Authorization: Splunk ${env.SPLUNK_HEC_TOKEN}" ^
+                        -H "Content-Type: application/json" ^
+                        -d "{\\"event\\": \\"ServiceNow ticket created\\", \\"sourcetype\\": \\"servicenow_ticket\\", \\"index\\": \\"${env.SPLUNK_INDEX}\\"}"
+                    """
+                }
+            }
+        }
+
         stage('Deploy') {
             steps {
                 script {
@@ -124,4 +160,3 @@ pipeline {
         }
     }
 }
-/////////      ////////////////// ///////
